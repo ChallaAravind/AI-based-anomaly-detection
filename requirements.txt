@@ -1,0 +1,5 @@
+flask
+pandas
+streamlit
+requests
+scikit-learn
