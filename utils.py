@@ -4,7 +4,7 @@ from email.message import EmailMessage
 def send_email_alert(subject, body):
     sender = "your_email@gmail.com"
     password = "your_app_password"
-    receiver = "ravindranaik7672@gmail.com"  # Replace with your actual email
+    receiver = "challaaravind22@gmail.com"  # Replace with your actual email
 
     msg = EmailMessage()
     msg.set_content(body)
