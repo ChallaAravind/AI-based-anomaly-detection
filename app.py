@@ -1,51 +1,66 @@
 from flask import Flask, request, jsonify
-import pickle
 import pandas as pd
-import numpy as np
+import pickle
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# Load model and scaler
+with open("model.pkl", "rb") as f:
+    model = pickle.load(f)
+with open("scaler.pkl", "rb") as f:
+    scaler = pickle.load(f)
 
 app = Flask(__name__)
 
-# Load the trained model
-try:
-    model = pickle.load(open("model.pkl", "rb"))
-    expected_features = ['cpu_usage', 'memory_usage']
-except Exception as e:
-    print("Error loading model:", e)
-    model = None
-    expected_features = []
+# ✅ Function to send email alert
+def send_email_alert(subject, body, to_email):
+    from_email = "challaaravind22@gmail.com"  # Replace with your email
+    password = "zbdl motr swrw xksi"       # Replace with your Gmail App Password
 
-@app.route('/predict', methods=['POST'])
+    msg = MIMEMultipart()
+    msg["From"] = from_email
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(from_email, password)
+            server.send_message(msg)
+        print("✅ Email alert sent successfully.")
+    except Exception as e:
+        print("❌ Failed to send email alert:", e)
+
+# ✅ Prediction route with email alert if anomaly (-1) is found
+@app.route("/predict", methods=["POST"])
 def predict():
     try:
         data = request.get_json()
-        print("Received data:", data)
-
-        # Convert to DataFrame
         df = pd.DataFrame(data)
 
-        print("Converted DataFrame:")
-        print(df.head())
+        # Normalize column names
+        df.rename(columns=lambda x: x.strip().lower().replace(" ", "_"), inplace=True)
 
-        # Replace NaN with None to ensure JSON compliance if you return it
-        df.replace({np.nan: None}, inplace=True)
+        features = ["cpu_usage", "memory_usage"]
+        if not all(col in df.columns for col in features):
+            return jsonify({"error": f"Required columns missing: {features}"}), 400
 
-        # Check for expected columns
-        if not all(feature in df.columns for feature in expected_features):
-            return jsonify({
-                "error": f"CSV file must contain these columns: {expected_features}. Received: {list(df.columns)}"
-            })
+        X_scaled = scaler.transform(df[features])
+        predictions = model.predict(X_scaled)
 
-        # If model is None, return error
-        if model is None:
-            return jsonify({"error": "Model not loaded"})
-
-        # Predict
-        predictions = model.predict(df)
+        # ✅ Send email if anomaly is detected
+        if -1 in predictions:
+            send_email_alert(
+                subject="🚨 Anomaly Detected in System Logs",
+                body="One or more anomalies (-1) were detected in the uploaded system logs.",
+                to_email="challaaravind22@gmail.com"  # Replace with actual email
+            )
 
         return jsonify({"anomalies": predictions.tolist()})
     except Exception as e:
-        print("Error in prediction:", e)
-        return jsonify({"error": str(e)})
+        return jsonify({"error": str(e)}), 500
 
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+if __name__ == "__main__":
+    app.run(debug=True)
